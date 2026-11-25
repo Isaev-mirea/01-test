@@ -31,21 +31,48 @@ if ($LASTEXITCODE -ne 0) {
     throw "Dependency installation failed."
 }
 
-# Stop the scheduled server and wait for its port to become free.
 Stop-ScheduledTask -TaskName $taskName
+Start-Sleep -Seconds 2
 
-for ($attempt = 0; $attempt -lt 20; $attempt++) {
-    $listener = Get-NetTCPConnection -LocalPort 8001 -State Listen `
-        -ErrorAction SilentlyContinue
+$listeners = @(Get-NetTCPConnection -LocalPort 8001 -State Listen `
+    -ErrorAction SilentlyContinue)
 
-    if (-not $listener) {
-        break
+if ($listeners.Count -gt 0) {
+    $previous = Get-Content $stateFile -Raw | ConvertFrom-Json
+    $previousApp = [string]$previous.appFile
+    $releaseRoot = Join-Path $root "releases\"
+
+    if (-not $previousApp.StartsWith(
+        $releaseRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Previous application path is outside the deployment folder."
     }
-    Start-Sleep -Seconds 1
-}
 
-if ($listener) {
-    throw "Port 8001 is still occupied. No unrelated processes were stopped."
+    $processIds = @($listeners |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+
+    # Validate every listener before stopping any process.
+    foreach ($processId in $processIds) {
+        $process = Get-CimInstance Win32_Process `
+            -Filter "ProcessId = $processId"
+
+        if (-not $process) {
+            continue
+        }
+
+        $matchesApp = $process.CommandLine -and
+            ($process.CommandLine.IndexOf(
+                $previousApp,
+                [System.StringComparison]::OrdinalIgnoreCase
+            ) -ge 0)
+
+        if ($process.Name -notmatch '^python(w)?\.exe$' -or -not $matchesApp) {
+            throw "Port 8001 belongs to another application. Nothing stopped."
+        }
+    }
+
+    foreach ($processId in $processIds) {
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # The launcher reads this file to select the new release.
