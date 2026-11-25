@@ -1,0 +1,45 @@
+name: Shop CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create virtual environment
+        run: py -3.12 -m venv .venv
+
+      - name: Install dependencies
+        run: .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+
+      - name: Build application
+        run: .\.venv\Scripts\python.exe build.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shop-build
+          path: dist/shop.zip
+          if-no-files-found: error
+          retention-days: 7
