@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Корзина{% endblock %}
+{% block content %}
+<p class="eyebrow">ВАШ ВЫБОР / 02</p><h1>Корзина</h1>
+{% if items %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Товар</th><th>Цена</th><th>Количество</th><th>Стоимость</th></tr></thead>
+  <tbody>{% for item in items %}<tr><td>{{ item.name }}</td><td>{{ item.price_cents|money }}</td><td>{{ item.quantity }}</td><td>{{ item.subtotal|money }}</td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="summary"><span>Общая стоимость</span><strong>{{ total|money }}</strong></div>
+<div class="actions"><a class="link" href="{{ url_for('catalog') }}">← Продолжить покупки</a>
+<form method="post" action="{{ url_for('clear_cart') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">Очистить корзину</button></form></div>
+{% else %}
+<section class="empty"><h2>Корзина пуста</h2><p>Добавьте товары из каталога.</p><a class="link" href="{{ url_for('catalog') }}">Перейти в каталог →</a></section>
+{% endif %}
+{% endblock %}

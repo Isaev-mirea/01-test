@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Каталог запчастей{% endblock %}
+{% block content %}
+<p class="eyebrow">КАТАЛОГ / 01</p>
+<h1>Запчасти для вашего автомобиля</h1>
+<p class="intro">Выберите нужные товары и соберите свою корзину.</p>
+<div class="grid">
+{% for product in products %}
+  <article class="card">
+    <span class="sku">АРТИКУЛ {{ '%04d'|format(product.id) }}</span>
+    <h2>{{ product.name }}</h2>
+    <p class="price">{{ product.price_cents|money }}</p>
+    <form method="post" action="{{ url_for('add_to_cart', product_id=product.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">Добавить в корзину <span aria-hidden="true">＋</span></button>
+    </form>
+  </article>
+{% else %}
+  <section class="empty"><h2>Товары не найдены</h2><p>Каталог пока пуст.</p></section>
+{% endfor %}
+</div>
+{% endblock %}

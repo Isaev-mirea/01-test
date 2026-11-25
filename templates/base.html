@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Магазин запчастей{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header><a class="brand" href="{{ url_for('catalog') }}">PARTS<span> / LAB</span></a>
+    <nav><a href="{{ url_for('catalog') }}">Каталог</a><a href="{{ url_for('cart') }}">Корзина <b>{{ cart_count }}</b></a></nav>
+  </header>
+  <main>
+    {% for message in get_flashed_messages() %}<div class="notice" role="status">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Учебный интернет-магазин · Версия {{ version }} · Оформление заказов не предусмотрено</footer>
+</body>
+</html>
