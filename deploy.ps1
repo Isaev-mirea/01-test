@@ -3,92 +3,58 @@ $ErrorActionPreference = "Stop"
 $root = Join-Path $env:USERPROFILE "shop-deploy"
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $stateFile = Join-Path $root "process.json"
-$keyFile = Join-Path $root "data\secret-key.txt"
-
+$taskName = "ShopLocalServer"
 $version = $env:GITHUB_SHA
+
 if (-not $version) {
     throw "Run this script through GitHub Actions."
 }
 
-$releaseName = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-$release = Join-Path $root "releases\$releaseName"
-$appFile = Join-Path $release "app.py"
+# Check the independent server launcher before changing anything.
+Get-ScheduledTask -TaskName $taskName -ErrorAction Stop | Out-Null
 
-if (-not (Test-Path $python)) {
-    throw "Deployment Python environment not found: $python"
+if (-not (Test-Path "$root\run-server.py")) {
+    throw "Server launcher not found."
+}
+if (-not (Test-Path "$root\data\secret-key.txt")) {
+    throw "Session key not found."
 }
 
-New-Item -ItemType Directory -Force -Path $release | Out-Null
-Expand-Archive -Path "dist\shop.zip" -DestinationPath $release -Force
+$releaseName = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+$release = Join-Path $root "releases\$releaseName"
 
-# Prepare dependencies before stopping the previous version.
+New-Item -ItemType Directory -Force -Path $release | Out-Null
+Expand-Archive "dist\shop.zip" -DestinationPath $release -Force
+
 & $python -m pip install -r "$release\requirements.txt"
 if ($LASTEXITCODE -ne 0) {
     throw "Dependency installation failed."
 }
 
-if (-not (Test-Path $keyFile)) {
-    $key = [guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N")
-    Set-Content -Path $keyFile -Value $key -Encoding ASCII
-}
+# Stop the scheduled server and wait for its port to become free.
+Stop-ScheduledTask -TaskName $taskName
 
-# Stop only the application recorded by this deployment script.
-if (Test-Path $stateFile) {
-    $previous = Get-Content $stateFile -Raw | ConvertFrom-Json
-    $oldProcess = Get-CimInstance Win32_Process `
-        -Filter "ProcessId = $($previous.processId)"
+for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    $listener = Get-NetTCPConnection -LocalPort 8001 -State Listen `
+        -ErrorAction SilentlyContinue
 
-    if ($oldProcess) {
-        $matchesApp = $oldProcess.CommandLine -and
-            $oldProcess.CommandLine.Contains([string]$previous.appFile)
-
-        if (-not $matchesApp) {
-            throw "Saved PID belongs to another process. Deployment stopped."
-        }
-
-        Stop-Process -Id $previous.processId -Force
-        Wait-Process -Id $previous.processId -Timeout 15 -ErrorAction SilentlyContinue
+    if (-not $listener) {
+        break
     }
-
-    Remove-Item $stateFile
+    Start-Sleep -Seconds 1
 }
 
-# Do not stop an unrelated application using this port.
-$listener = Get-NetTCPConnection -LocalPort 8001 -State Listen `
-    -ErrorAction SilentlyContinue
 if ($listener) {
-    throw "Port 8001 is occupied. Deployment stopped."
+    throw "Port 8001 is still occupied. No unrelated processes were stopped."
 }
 
-$env:PORT = "8001"
-$env:SHOP_DATABASE = Join-Path $root "data\shop.db"
-$env:SHOP_SECRET_KEY = (Get-Content $keyFile -Raw).Trim()
-$env:BUILD_VERSION = $version
-
-# Keep the deployed server running after the CI job finishes.
-$tracking = $env:RUNNER_TRACKING_ID
-Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
-
-try {
-    $server = Start-Process -FilePath $python `
-        -ArgumentList "`"$appFile`"" `
-        -WorkingDirectory $release `
-        -RedirectStandardOutput "$root\logs\$releaseName.out.log" `
-        -RedirectStandardError "$root\logs\$releaseName.err.log" `
-        -WindowStyle Hidden -PassThru
-}
-finally {
-    if ($null -ne $tracking) {
-        $env:RUNNER_TRACKING_ID = $tracking
-    }
-    Remove-Item Env:\SHOP_SECRET_KEY -ErrorAction SilentlyContinue
-}
-
+# The launcher reads this file to select the new release.
 @{
-    processId = $server.Id
-    appFile = $appFile
+    appFile = Join-Path $release "app.py"
     version = $version
 } | ConvertTo-Json | Set-Content $stateFile -Encoding UTF8
+
+Start-ScheduledTask -TaskName $taskName
 
 $healthy = $false
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
@@ -106,9 +72,7 @@ for ($attempt = 0; $attempt -lt 30; $attempt++) {
 }
 
 if (-not $healthy) {
-    Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-    Remove-Item $stateFile -ErrorAction SilentlyContinue
-    Get-Content "$root\logs\$releaseName.err.log" -ErrorAction SilentlyContinue
+    Get-Content "$root\logs\server.log" -Tail 30 -ErrorAction SilentlyContinue
     throw "Deployment health check failed."
 }
 
