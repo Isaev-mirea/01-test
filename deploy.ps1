@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Join-Path $env:USERPROFILE "shop-deploy"
 $python = Join-Path $root ".venv\Scripts\python.exe"
@@ -65,7 +65,7 @@ if ($listeners.Count -gt 0) {
                 [System.StringComparison]::OrdinalIgnoreCase
             ) -ge 0)
 
-        if ($process.Name -notmatch '^python(w)?\.exe$' -or -not $matchesApp) {
+        if ($process.Name -notmatch '^python(w)?(\d+(\.\d+)*)?\.exe$' -or -not $matchesApp) {
             throw "Port 8001 belongs to another application. Nothing stopped."
         }
     }
