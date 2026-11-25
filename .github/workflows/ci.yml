@@ -43,3 +43,6 @@ jobs:
           path: dist/shop.zip
           if-no-files-found: error
           retention-days: 7
+
+      - name: Deploy locally and check health
+        run: .\deploy.ps1
