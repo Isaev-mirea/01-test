@@ -1,0 +1,31 @@
+name: Runner check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check local environment
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Show runner
+        run: |
+          Write-Output "Runner: $env:RUNNER_NAME"
+          Write-Output "OS: $env:RUNNER_OS"
+          Write-Output "Architecture: $env:RUNNER_ARCH"
+
+      - name: Check Git
+        run: git --version
+
+      - name: Check Python and SQLite
+        run: |
+          py -3.12 -c "import sys, sqlite3; print(sys.version); print('SQLite:', sqlite3.sqlite_version)"
