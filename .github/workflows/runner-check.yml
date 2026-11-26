@@ -9,7 +9,7 @@ permissions:
 jobs:
   check:
     name: Check local environment
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: [self-hosted, Windows, X64, shop-local]
     timeout-minutes: 5
 
     defaults:

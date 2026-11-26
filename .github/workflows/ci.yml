@@ -1,4 +1,4 @@
-﻿name: Shop CI
+name: Shop CI
 
 on:
   push:
@@ -8,10 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: shop-local-delivery
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Test and build
-    runs-on: [self-hosted, Windows, X64]
+    name: Build and test
+    runs-on: [self-hosted, Windows, X64, shop-local]
     timeout-minutes: 15
 
     defaults:
@@ -43,6 +47,29 @@ jobs:
           path: dist/shop.zip
           if-no-files-found: error
           retention-days: 7
+
+  deploy:
+    name: Deploy locally
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, shop-local]
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Checkout deployment script
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: shop-build
+          path: dist
 
       - name: Deploy locally and check health
         run: .\deploy.ps1
